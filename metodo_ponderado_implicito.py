@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-from random import seed
+# import seaborn as sns
+# from random import seed
 
 # Siempre seteamos la seed de aleatoridad para que los # resultados sean reproducibles
-seed(12345)
-np.random.seed(12345)
+# seed(12345)
+# np.random.seed(12345)
 
-sns.set_theme()
+# sns.set_theme()
 
 # Función de exitación externa c(t)
 def c(t):
@@ -56,9 +56,10 @@ dt = 0.005
 def metodo_ponderado_implicito(beta, f, A_inversa, termino_indep, t):
 	cantidad = t_final/dt + 1
 	# Inicialización de variables
-	u = np.zeros(int(cantidad*2))
-	u.shape=(2, int(cantidad))
-	u2 = np.zeros_like(t)
+	u2 = np.zeros(int(cantidad*2))
+	u2.shape=(2, int(cantidad))
+	# u2 = np.zeros_like(t)
+	u = np.zeros_like(t)
 	v = np.zeros_like(t)
 
 	# Condiciones iniciales (ajustar según el problema)
@@ -67,18 +68,25 @@ def metodo_ponderado_implicito(beta, f, A_inversa, termino_indep, t):
 
 	# Bucle principal para la integración numérica
 	for n in range(1, len(t)-1):
-		if beta == 0:
-			u2[n+1] = u2[n] + dt *v[n]
-			v[n+1] = v[n] + dt * f(u2[n], v[n])
-		else:
+		if beta == 1:
 		#      Método ponderado implícito
-			aux = np.array(A_inversa @ u[:,n] + termino_indep)
-			u[:,(n+1)] = aux
+			aux = np.array(A_inversa @ u2[:,n] + termino_indep)
+			u2[:,(n+1)] = aux
+		else:
+			u[n+1] = u[n] + dt * (beta * v[n+1] + (1-beta) * v[n])
+			v[n+1] = v[n] + dt * ((beta * f(u[n+1], v[n+1])) + ((1 - beta)*(f(u[n], v[n]))))
+		# if beta == 0:
+		# 	u2[n+1] = u2[n] + dt *v[n]
+		# 	v[n+1] = v[n] + dt * f(u2[n], v[n])
+		# else:
+		# #      Método ponderado implícito
+		# 	aux = np.array(A_inversa @ u[:,n] + termino_indep)
+		# 	u[:,(n+1)] = aux
 
-	if beta == 0:
-		return u2, t
+	if beta == 1:
+		return u2[1], t
 
-	return u[1], t
+	return u, t
 
 def solucion_sistema_amortiguado(beta, f, extras, l):
 	# Vector de tiempo
@@ -96,36 +104,41 @@ def solucion_sistema_amortiguado(beta, f, extras, l):
 	for n in range(1, len(t)-1):
 		# Método ponderado implícito
 		u[n+1] = u[n] + dt * (beta * v[n+1] + (1-beta) * v[n])
-		v[n+1] = v[n] + dt * (f(u[n+1], extras[0], v[n+1], extras[1], t[n+1], l))
+		v[n+1] = v[n] + dt * ((beta * f(u[n+1], extras[0], v[n+1], extras[1], n, l)) + ((1 - beta)*(f(u[n], extras[0], v[n], extras[1], n, l))))
 	return u, t
 
 def grafico(t, u, beta):
-	name = 'solución numérica y soulición analítica obtenida con beta = ' + str(beta) + '.png'
+	name = 'solución obtenida con beta = ' + str(beta) + '.png'
 	# Graficar la solución
-	ax: tuple[plt.Axes, plt.Axes]
-	fig, ax = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
-	ax[0].plot(t, u, label='aproximación')
-	ax[0].plot(t, sol_analitica(t), 'r--', label='solucion analítica')
-	ax[0].set_title(f'y(t) con beta = {beta} y paso = {dt}')
-	ax[0].set_xlabel('Tiempo (s)')
-	ax[0].set_ylabel('y')
-	ax[0].grid(True)
-	# plt.savefig(name)
+	# ax: tuple[plt.Axes, plt.Axes]
+	ax: plt.Axes
+	# fig, ax = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+	fig, ax = plt.subplots()
+	ax.plot(t, u, label='aproximación')
+	ax.plot(t, sol_analitica(t), 'r--', label='solucion analítica')
+	ax.set_title(f'y(t) con beta = {beta} y paso = {dt}')
+	ax.set_xlabel('Tiempo (s)')
+	ax.set_ylabel('y')
+	ax.grid(True)
+	plt.savefig(name)
 
-	# error_name = f'Error de la aproximación con beta = {str(beta)}.png'
+	error_name = f'Error con beta = {str(beta)}.png'
 
 	paso = 0
 	aproximacion = np.copy(u)
 	for i in range(len(t)):
 		aproximacion[i] = (sol_analitica(paso) - aproximacion[i])
 		paso += dt
-	ax[1].plot(t, aproximacion)
+	ax: plt.Axes
+	# fig, ax = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+	fig, ax = plt.subplots()
+	ax.plot(t, aproximacion)
 	# ax.plot(t, sol_analitica(t), 'r--', label='solucion analítica')
-	ax[1].set_title(f'e(t) con beta = {beta} y paso = {dt}')
-	ax[1].set_xlabel('Tiempo (s)')
-	ax[1].set_ylabel('Error')
-	ax[1].grid(True)
-	plt.savefig(name)
+	ax.set_title(f'e(t) con beta = {beta} y paso = {dt}')
+	ax.set_xlabel('Tiempo (s)')
+	ax.set_ylabel('Error')
+	ax.grid(True)
+	plt.savefig(error_name)
 
 def grafico_sistema_amortiguado(t, u, h, beta):
 	name = 'solución del sistema amortiguado.png'
@@ -150,8 +163,8 @@ if __name__ == "__main__":
 		A_inversa = []
 		termino_indep = []
 		if beta != 0:
-			divisor = ((m - h**2)* k * beta**2) + h*beta*l_inicial
-			A_inversa = np.array([[(m+(h*beta*l_inicial))/divisor , (h*m*beta)/divisor], 
+			divisor = ((m + h**2)* k * beta**2) + h*beta*l_inicial
+			A_inversa = np.array([[(m+(h*beta*l_inicial))/divisor , -1*(h*m*beta)/divisor], 
 						[(h*k*beta)/divisor , m/divisor]])
 			termino_indep = np.array([[h*(1-beta) , h*(1-beta)*(k/m*c_inicial + l_inicial/m*c_prima(0))]])
 
@@ -160,9 +173,9 @@ if __name__ == "__main__":
 
 		u, t = metodo_ponderado_implicito(beta, f_sin_amortiguar, A_inversa, termino_indep, t)
 		print("soulciones:", u)
-		grafico(t, u, betas)
+		grafico(t, u, beta)
 
-	# Prueba del sistema amortiguado con beta = 0.75 y dt = 0.005
+	# Prueba del sistema amortiguado con beta = 0.5 y dt = 0.005
 	l = 750
 	extras = [c, c_prima]
 	u2, t2 = solucion_sistema_amortiguado(beta, f, extras, l)
