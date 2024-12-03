@@ -50,7 +50,7 @@ k = 25000
 l_inicial = 0
 c_inicial = 0.1
 t_final = 5
-dt = 0.005
+dt = 0.0005
 # dt = 0.05
 
 def metodo_ponderado_implicito(beta, f, A_inversa, termino_indep, t):
