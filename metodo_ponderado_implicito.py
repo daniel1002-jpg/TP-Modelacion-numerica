@@ -42,7 +42,7 @@ k = 25000
 l_inicial = 0
 c_inicial = 0.1
 t_final = 5
-dt = 0.005
+dt = 0.001
 # dt = 0.05
 
 def euler_implicito(A_inversa, termino_indep, t):
@@ -95,15 +95,14 @@ def solucion_sistema_amortiguado(beta, f, extras, l):
 	v[0] = 0
 
 	# Bucle principal para la integración numérica
+	i = 0
 	for n in range(1, len(t)-1):
 		# Método ponderado implícito
 		u[n+1] = u[n] + dt * (beta * v[n+1] + (1-beta) * v[n])
-		v[n+1] = v[n] + dt * ((beta * f(u[n+1], extras[0], v[n+1], extras[1], n, l)) + ((1 - beta)*(f(u[n], extras[0], v[n], extras[1], n, l))))
+		v[n+1] = v[n] + dt * ((beta * f(u[n+1], extras[0], v[n+1], extras[1], i+dt, l)) + ((1 - beta)*(f(u[n], extras[0], v[n], extras[1], i, l))))
+		i += dt
 	
-	if beta == 1:
-		return v, t
-	
-	return u, t
+	return u, v, t
 
 def grafico(t, u, beta):
 	name = 'solución obtenida con beta = ' + str(beta) + '.png'
@@ -134,12 +133,13 @@ def grafico(t, u, beta):
 	ax.grid(True)
 	plt.savefig(error_name)
 
-def grafico_sistema_amortiguado(t, u, h, beta):
+def grafico_sistema_amortiguado(t, u, v, h, beta):
 	name = 'solución del sistema amortiguado.png'
 	# Graficar la solución
 	ax: plt.Axes
 	fig, ax = plt.subplots()
 	plt.plot(t, u, label='aproximación')
+	plt.plot(t, v, "r--", label='velocidad')
 	plt.title(f'y(t) con beta = {beta} y paso = {h}')
 	plt.xlabel('Tiempo (s)')
 	plt.ylabel('y')
@@ -171,6 +171,6 @@ if __name__ == "__main__":
 	# Prueba del sistema amortiguado con beta = 0.5 y dt = 0.005
 	# l = 750
 	# extras = [c, c_prima]
-	# u2, t2 = solucion_sistema_amortiguado(beta, f, extras, l)
+	# u2, v2, t2 = solucion_sistema_amortiguado(beta, f, extras, l)
 	# print("soulciones:", u2)
-	# grafico_sistema_amortiguado(t2, u2, 0.005, 0.5)
+	# grafico_sistema_amortiguado(t2, u2, v2, dt, 0.5)
