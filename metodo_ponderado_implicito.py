@@ -1,13 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-# import seaborn as sns
-# from random import seed
-
-# Siempre seteamos la seed de aleatoridad para que los # resultados sean reproducibles
-# seed(12345)
-# np.random.seed(12345)
-
-# sns.set_theme()
 
 # Función de exitación externa c(t)
 def c(t):
@@ -50,15 +42,24 @@ k = 25000
 l_inicial = 0
 c_inicial = 0.1
 t_final = 5
-dt = 0.01
+dt = 0.005
 # dt = 0.05
 
-def metodo_ponderado_implicito(beta, f, A_inversa, termino_indep, t):
-	cantidad = t_final/dt + 1
+def euler_implicito(A_inversa, termino_indep, t):
+	# Numéro de pasos de tiempo
+	cantidad = len(t)
+	
 	# Inicialización de variables
-	u2 = np.zeros(int(cantidad*2))
-	u2.shape=(2, int(cantidad))
-	# u2 = np.zeros_like(t)
+	u = np.zeros((2, cantidad))
+	
+	# Bucle principal del método
+	for n in range(cantidad - 1):
+		aux = A_inversa @ u[:,n] + termino_indep
+		u[:,(n+1)] = aux	
+	return u[0], t
+
+def metodo_ponderado_implicito(beta, f, A_inversa, termino_indep, t):
+	# Inicialización de variables
 	u = np.zeros_like(t)
 	v = np.zeros_like(t)
 
@@ -67,24 +68,17 @@ def metodo_ponderado_implicito(beta, f, A_inversa, termino_indep, t):
 	v[0] = 0
 
 	# Bucle principal para la integración numérica
-	for n in range(1, len(t)-1):
-		if beta == 1:
-		#      Método ponderado implícito
-			aux = np.array(A_inversa @ u2[:,n] + termino_indep)
-			u2[:,(n+1)] = aux
-		else:
+	if beta == 1:
+		u2, t = euler_implicito(A_inversa, termino_indep, t)
+	else:			
+		for n in range(1, len(t)-1):
+			#  Método ponderado implícito
 			u[n+1] = u[n] + dt * (beta * v[n+1] + (1-beta) * v[n])
 			v[n+1] = v[n] + dt * ((beta * f(u[n+1], v[n+1])) + ((1 - beta)*(f(u[n], v[n]))))
-		# if beta == 0:
-		# 	u2[n+1] = u2[n] + dt *v[n]
-		# 	v[n+1] = v[n] + dt * f(u2[n], v[n])
-		# else:
-		# #      Método ponderado implícito
-		# 	aux = np.array(A_inversa @ u[:,n] + termino_indep)
-		# 	u[:,(n+1)] = aux
-
+			
 	if beta == 1:
-		return u2[1], t
+		# print("solución obtenida:", u2[1])
+		return u2, t
 
 	return u, t
 
@@ -105,14 +99,16 @@ def solucion_sistema_amortiguado(beta, f, extras, l):
 		# Método ponderado implícito
 		u[n+1] = u[n] + dt * (beta * v[n+1] + (1-beta) * v[n])
 		v[n+1] = v[n] + dt * ((beta * f(u[n+1], extras[0], v[n+1], extras[1], n, l)) + ((1 - beta)*(f(u[n], extras[0], v[n], extras[1], n, l))))
+	
+	if beta == 1:
+		return v, t
+	
 	return u, t
 
 def grafico(t, u, beta):
 	name = 'solución obtenida con beta = ' + str(beta) + '.png'
 	# Graficar la solución
-	# ax: tuple[plt.Axes, plt.Axes]
 	ax: plt.Axes
-	# fig, ax = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
 	fig, ax = plt.subplots()
 	ax.plot(t, u, label='aproximación')
 	ax.plot(t, sol_analitica(t), 'r--', label='solucion analítica')
@@ -130,10 +126,8 @@ def grafico(t, u, beta):
 		aproximacion[i] = (sol_analitica(paso) - aproximacion[i])
 		paso += dt
 	ax: plt.Axes
-	# fig, ax = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
 	fig, ax = plt.subplots()
 	ax.plot(t, aproximacion)
-	# ax.plot(t, sol_analitica(t), 'r--', label='solucion analítica')
 	ax.set_title(f'e(t) con beta = {beta} y paso = {dt}')
 	ax.set_xlabel('Tiempo (s)')
 	ax.set_ylabel('Error')
@@ -144,56 +138,39 @@ def grafico_sistema_amortiguado(t, u, h, beta):
 	name = 'solución del sistema amortiguado.png'
 	# Graficar la solución
 	ax: plt.Axes
-	#        fig, ax = plt.subplot()
 	fig, ax = plt.subplots()
 	plt.plot(t, u, label='aproximación')
 	plt.title(f'y(t) con beta = {beta} y paso = {h}')
 	plt.xlabel('Tiempo (s)')
 	plt.ylabel('y')
 	plt.grid(True)
-	# plt.savefig(name)
 	plt.savefig(name)
 
 if __name__ == "__main__":
 	# Elección del sistema sin amortiguación
 	betas = [0, 0.25, 0.5, 0.75, 1]
 	h = dt
+	beta = 1
+	l = 0
+	cp = 0
+	# Matriz inversa para la solución sin amortiguación
+	divisor = (m + (h**2) * k * (beta**2) + (h * beta * l))
+	
+	A_inversa = np.array([[((m+(h*beta*l))/divisor) , ((h*m*beta)/divisor)], 
+				[(((-h*k*beta))/divisor) , (m/divisor)]])
+	
+	termino_indep = np.array([0 , (h * beta) * (k * (c_inicial/m) + l * (cp/m))])
+	
+	# Vector de tiempos
+	t = np.arange(0, t_final+dt, dt)
 	for beta in betas:
-		# Matriz inversa para la solución sin amortiguación
-		A_inversa = []
-		termino_indep = []
-		if beta != 0:
-			divisor = ((m + h**2)* k * beta**2) + h*beta*l_inicial
-			A_inversa = np.array([[(m+(h*beta*l_inicial))/divisor , -1*(h*m*beta)/divisor], 
-						[(h*k*beta)/divisor , m/divisor]])
-			termino_indep = np.array([[h*(1-beta) , h*(1-beta)*(k/m*c_inicial + l_inicial/m*c_prima(0))]])
-
-		# Vector de tiempo
-		t = np.arange(0, t_final+dt, dt)
-
 		u, t = metodo_ponderado_implicito(beta, f_sin_amortiguar, A_inversa, termino_indep, t)
 		print("soulciones:", u)
 		grafico(t, u, beta)
-
+	
 	# Prueba del sistema amortiguado con beta = 0.5 y dt = 0.005
-	l = 750
-	extras = [c, c_prima]
-	u2, t2 = solucion_sistema_amortiguado(beta, f, extras, l)
-	print("soulciones:", u2)
-	grafico_sistema_amortiguado(t2, u2, 0.005, 0.5)
-
-	#        u1, t = metodo_ponderado_implicito(0)
-	#        print("soulciones:", u1)
-	#        grafico(t, u1, 0)
-	#        u2, t = metodo_ponderado_implicito(0.25)
-	#        print("soulciones:", u2)
-	#        grafico(t, u2, 0.25)
-	#        u3, t = metodo_ponderado_implicito(0.5)
-	#        print("soulciones:", u3)
-	#        grafico(t, u3, 0.5)
-	#        u4, t = metodo_ponderado_implicito(0.75)
-	#        print("soulciones:", u4)
-	#        grafico(t, u4, 0.75)
-	#        u5, t = metodo_ponderado_implicito(1)
-	#        print("soulciones:", u5)
-	#        grafico(t, u5, 1)
+	# l = 750
+	# extras = [c, c_prima]
+	# u2, t2 = solucion_sistema_amortiguado(beta, f, extras, l)
+	# print("soulciones:", u2)
+	# grafico_sistema_amortiguado(t2, u2, 0.005, 0.5)
