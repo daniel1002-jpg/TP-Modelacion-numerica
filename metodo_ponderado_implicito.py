@@ -11,6 +11,15 @@ c_inicial = 0.1
 t_final = 5
 dt = 0.005
 
+# Analizar compresión del sistema
+def evaluar_compresion(beta, h, f, l, k, t):
+	u, v, t = solucion_sistema_amortiguado(beta, h, f, l, k)
+	# print("soulciones:", u)
+	grafico_sistema_amortiguado(t, u, v, h, beta, k, l)
+
+	return u, v, t
+
+
 # Calcular el orden de convergencia
 # def calcular_orden(beta, f, hs):
 # 	errores = []
@@ -78,11 +87,11 @@ def f_sin_amortiguar(y, v):
 	return ((k/m) * (c_inicial - y)) + ((l_inicial/m) * (c_prima(0) - v))
 
 # Función del sistema
-def f(y, c, v, c_prima, t, l):
+def f(y,v, t, l):
 	return ((k/m) * (c(t) - y)) + ((l/m) * (c_prima(t) - v))
 
 # Obtener matriz inversa para resolver sistema: Ax = b
-def calcular_A_inversa(beta, h, l):
+def calcular_A_inversa(beta, h, l, k):
 	divisor = (m + ((h**2) * k * (beta**2)) + (h * beta * l))
 
 	return np.array([[((m + (h * beta * l)) / divisor) , ((h * m * beta) / divisor)], 
@@ -92,6 +101,11 @@ def calcular_A_inversa(beta, h, l):
 def calcular_termino_indep(beta, f, u, v):
 	return np.array([h * ((1 - beta) * v), 
 			(h * beta) * (k * (c_inicial/m) +  0 * (0/m)) + h * (1 - beta) * f(u, v)])
+
+# Obtnerer término independiente para resolver el sistema amortiguado
+def calcular_termino_indep(beta, f, u, v, t, l, k):
+	return np.array([h * ((1 - beta) * v), 
+			(h * beta) * (k * (c(t)/m) +  l * (c_prima(t)/m)) + h * (1 - beta) * f(u, v, t, l)])
 
 def euler_explicito(t, h, f):
 	# Inicialización de variables
@@ -119,7 +133,7 @@ def euler_implicito(t, h, f):
 	u[:, 0] = [0, 0]
 
 	# Obtención de A inversa
-	A_inversa = calcular_A_inversa(1, h, 0)
+	A_inversa = calcular_A_inversa(1, h, 0, k)
 
 	# Obtención del término independiente
 	termino_indep = calcular_termino_indep(1, f, 0, 0)
@@ -149,7 +163,7 @@ def metodo_ponderado_implicito(beta, h, f, t):
 		return euler_explicito(t, h, f)
 	else:
 		# Calculo A inviversa para resolver el sistema
-		A_inversa = calcular_A_inversa(beta, h, 0)
+		A_inversa = calcular_A_inversa(beta, h, 0, k)
 
 		# Bucle principal para la integración numérica
 		for n in range(len(t) - 1):
@@ -165,7 +179,7 @@ def metodo_ponderado_implicito(beta, h, f, t):
 
 	return u, t
 
-def solucion_sistema_amortiguado(beta, f, extras, l):
+def solucion_sistema_amortiguado(beta, h, f, l, k):
 	# Vector de tiempo
 	t = np.arange(0, t_final+dt, dt)
 
@@ -177,12 +191,23 @@ def solucion_sistema_amortiguado(beta, f, extras, l):
 	u[0] = 0
 	v[0] = 0
 
+	uv_n = np.array([u[0], v[0]])
+
+	# Calculo A inviversa para resolver el sistema
+	A_inversa = calcular_A_inversa(beta, h, l, k)
+
 	# Bucle principal para la integración numérica
 	i = 0
-	for n in range(len(t)-1):
-		# Método ponderado implícito
-		u[n+1] = u[n] + dt * (beta * v[n+1] + (1-beta) * v[n])
-		v[n+1] = v[n] + dt * ((beta * f(u[n+1], extras[0], v[n+1], extras[1], i+dt, l)) + ((1 - beta)*(f(u[n], extras[0], v[n], extras[1], i, l))))
+	for n in range(len(t) - 1):
+		# Cálculo el término independiente para cada iteración
+		termino_indep = calcular_termino_indep(beta, f, u[n], v[n], t[n], l, k)
+		
+		b = uv_n + termino_indep
+
+		uv_np1 = A_inversa @ b
+
+		u[n+1], v[n+1] = uv_np1
+		uv_n = uv_np1
 		i += dt
 	
 	return u, v, t
@@ -232,39 +257,75 @@ def grafico(t, u, beta):
 	plt.tight_layout()
 	plt.savefig(name)
 
-def grafico_sistema_amortiguado(t, u, v, h, beta):
-	name = 'solución del sistema amortiguado.png'
+def grafico_sistema_amortiguado(t, u, v, h, beta, k, l):
+	# name = 'solución del sistema amortiguado optimizado.png'
+	name = 'acelaración del sistema amortiguado optimizado.png'
+	
 	# Graficar la solución
 	ax: plt.Axes
 	fig, ax = plt.subplots()
-	plt.plot(t, u, label='aproximación')
-	# plt.plot(t, v, "r--", label='velocidad')
-	plt.title(f'y(t) con beta = {beta} y paso = {h}')
+	# plt.plot(t, u, label='aproximación')
+
+	exitaciones = [c(paso) for paso in t]
+
+	# Obtener máxima compresión
+	aproximacion = np.copy(u)
+	minimo = 0
+	for i in range(len(t)):
+		aproximacion[i] = (u[i]- float(c(t[i])))
+		if aproximacion[i] < minimo:
+			minimo = aproximacion[i]
+
+	print(f"Máxima compresión obtenida con k = {k} y lambda = {l}: {minimo}")
+
+	# plt.plot(t, exitaciones, "r-", label="amortiguación")
+	# print(f"acelarión: {v}")
+	# print(f"exitación externa: {exitaciones}")
+	plt.plot(t, v, "r-", label='aceleración')
+	plt.title(f'y\'\' (t) Crank-Nicolson')
+	# plt.title("y(t) del amortiguador")
 	plt.xlabel('Tiempo (s)')
-	plt.ylabel('y')
+	plt.ylabel('y\'\'')
+	# plt.ylabel('compresión')
 	plt.grid(True)
 	plt.savefig(name)
 
+def maximaCompresion(beta, h,k,l, t):
+	# def f2(y,c,t,y_prim,c_prim):
+	# 	m = 104351/200
+	# 	res =  (k/m)*(c(t)-y) + (lam/m) * (c_prim(t) - y_prim)
+	# 	return res
+
+	paso = 0
+	aproximada, _, _ = evaluar_compresion(beta, h, f, l, k, t)
+	minimo = float("inf")
+	for j in range (len(t)-1):
+		aproximada[j] = (aproximada[j] - c(paso))
+		if aproximada[j] < minimo :
+			minimo = aproximada[j]
+		paso += h
+	return minimo
+
 if __name__ == "__main__":
 	# Elección del sistema sin amortiguación
-	betas = [0, 0.25, 0.5, 0.75, 1]
-	h = dt
-	beta = 1
-	l = 0
-	cp = 0
+	# betas = [0, 0.25, 0.5, 0.75, 1]
+	# h = dt
+	# beta = 1
+	# l = 0
+	# cp = 0
 	
 	# Vector de tiempos
-	t = np.arange(0, t_final+dt, dt)
-	for beta in betas:
+	# t = np.arange(0, t_final+dt, dt)
+	# for beta in betas:
 
-		print(f"paso usado: {dt}")
-		u, t = metodo_ponderado_implicito(beta, h, f_sin_amortiguar, t)
-		print(f"soulciones para beta = {beta}: {u}")
-		grafico(t, u, beta)
+	# 	print(f"paso usado: {dt}")
+	# 	u, t = metodo_ponderado_implicito(beta, h, f_sin_amortiguar, t)
+	# 	print(f"soulciones para beta = {beta}: {u}")
+	# 	grafico(t, u, beta)
 
-		# Periodo de oscialción
-		T = obtener_periodo_promedio(u, t)
-		print("Período de oscilación (promedio):", T)
+	# 	# Periodo de oscialción
+	# 	T = obtener_periodo_promedio(u, t)
+	# 	print("Período de oscilación (promedio):", T)
 
 		# Orden de cada caso
 		# hs = [0.02, 0.01, 0.005, 0.0025]  # Diferentes pasos
@@ -275,9 +336,59 @@ if __name__ == "__main__":
 	
 
 	# Prueba del sistema amortiguado con beta = 0.5 y dt = 0.005
-	# l = 750
-	# beta = 0.5
-	# extras = [c, c_prima]
-	# u2, v2, t2 = solucion_sistema_amortiguado(beta, f, extras, l)
+	l = 750
+	k = 25000
+	beta = 0.5
+	h = 0.005
+	t = np.arange(0, t_final+h, h)
+	# # extras = [c, c_prima]
+	# u2, v2, t2 = solucion_sistema_amortiguado(beta, h, f, l)
 	# print("soulciones:", u2)
-	# grafico_sistema_amortiguado(t2, u2, v2, dt, 0.5)
+	# grafico_sistema_amortiguado(t2, u2, h, beta, k, l)
+
+	# Búsqueda de lambda y k óptimos
+	# Primer método
+	# for k_test in [2500, 5000, 10000, 15000, 25000, 30000, 45000, 50000]:
+	# 	evaluar_compresion(beta, h, f, l, k_test, t)
+
+	# for l_test in [500, 750, 1000, 1250, 1500, 1750, 2000, 2500]:
+	# 	evaluar_compresion(beta, h, f, l_test, 10000, t)
+
+	# for l_test in [500, 750, 1000, 1250, 1500, 1750, 2000, 2500]:
+	# 	evaluar_compresion(beta, h, f, l_test, 25000, t)	
+
+	# evaluar_compresion(beta, h, f, l, k, t)
+	# evaluar_compresion(beta, h, f, l, 2500, t)
+	# evaluar_compresion(beta, h, f, l, 5000, t)
+	# evaluar_compresion(beta, h, f, l, 10000, t)
+	# evaluar_compresion(beta, h, f, l, 15000, t)
+	# evaluar_compresion(beta, h, f, l, 40000, t)
+
+
+	# Segundo método
+	# maximaComp = -0.05
+	# compFinal = float("inf")
+	# minimaPonderacion = 10000000000
+	# lamElecto = 150
+	# kElecto = 25000
+	# lamV = np.arange(150,12000,50)
+	# kV = np.arange(2500,100000,1000)
+	# for i in range(int(lamV.shape[0])-1):
+	# 	for j in range(int(kV.shape[0])-1):
+	# 		act = 0
+	# 		act = maximaCompresion(beta, h, int(kV[j]), int(lamV[i]), t)
+	# 		if act >= maximaComp:
+	# 			ponderacionActual = lamV[i]/750 + kV[j]/25000
+	# 			if ponderacionActual < minimaPonderacion :
+	# 				minimaPonderacion = ponderacionActual
+	# 				lamElecto= lamV[i]
+					
+	# 				kElecto = kV[j]
+	# 				compFinal = act
+	# 		print(f"Máxima compresión k = {kV[j]} lamda = {lamV[i]}: {act}")
+	# print('K elegido = '+ str(kElecto) +' y lambda electo = ' + str(lamElecto) + ' con compresion = ' + str(compFinal))
+	kElecto = 62500
+	lamElecto = 8400
+	t=np.arange(0,t_final+h,h)
+
+	evaluar_compresion(0.5, h, f, lamElecto, kElecto, t)
